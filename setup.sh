@@ -57,6 +57,18 @@ check_ipv6_status() {
     fi
 }
 
+get_default_interface() {
+    interfaces=($(ip -o link show | awk -F': ' '{print $2}' | grep -v 'lo'))
+    echo "${interfaces[0]}"
+}
+
+check_mtu() {
+    iface=$(get_default_interface)
+    mtu=$(ip link show "$iface" | grep -oP 'mtu \K[0-9]+')
+    echo -n "Current MTU ($iface): "
+    echo -e "${YELLOW}$mtu${NC}"
+}
+
 enable_bbr() {
     echo "Detected distribution: $DISTRO"
     case "$DISTRO" in
@@ -144,6 +156,44 @@ disable_ipv6() {
     echo -e "${RED}IPv6 disabled.${NC}"
 }
 
+set_mtu() {
+    interfaces=($(ip -o link show | awk -F': ' '{print $2}' | grep -v 'lo'))
+    if [[ ${#interfaces[@]} -eq 0 ]]; then
+        echo -e "${RED}No network interfaces found.${NC}"
+        return
+    elif [[ ${#interfaces[@]} -eq 1 ]]; then
+        iface=${interfaces[0]}
+        echo -e "${GREEN}Using interface: $iface${NC}"
+    else
+        clear
+        echo -e "${YELLOW}Multiple network interfaces found:${NC}"
+        select iface in "${interfaces[@]}"; do
+            if [[ -n "$iface" ]]; then
+                echo -e "${GREEN}Selected interface: $iface${NC}"
+                break
+            else
+                echo "Invalid selection, please try again."
+            fi
+        done
+    fi
+
+    echo -e "${GREEN}Note: If you experience high packet loss, try lowering MTU value.${NC}"
+    echo -ne "${YELLOW}Enter MTU value for $iface: ${NC}"
+    read mtu_val
+
+    if ! [[ "$mtu_val" =~ ^[0-9]+$ ]]; then
+        echo -e "${RED}Invalid MTU value. It must be a number.${NC}"
+        return
+    fi
+
+    ip link set dev "$iface" mtu "$mtu_val"
+    if [[ $? -eq 0 ]]; then
+        echo -e "${GREEN}MTU set to $mtu_val on $iface.${NC}"
+    else
+        echo -e "${RED}Failed to set MTU.${NC}"
+    fi
+}
+
 check_kernel_version
 
 while true; do
@@ -151,16 +201,16 @@ while true; do
     echo "==================================="
     echo -e "GitHub: ${GREEN}https://github.com/monhacer${NC}"
     echo "==================================="
-    echo ""
     check_bbr_status
     check_ipv6_status
-    echo ""
+    check_mtu
     echo "========= BBR & IPv6 Menu ========="
     echo ""
     echo -e "1.${GREEN} Enable BBR${NC}"
     echo -e "2.${GREEN} Disable BBR${NC}"
     echo -e "3.${GREEN} Enable IPv6${NC}"
     echo -e "4.${GREEN} Disable IPv6${NC}"
+    echo -e "5.${GREEN} Set MTU value${NC}"
     echo -e "0.${GREEN} Exit${NC}"
     echo ""
     echo -ne "${YELLOW}Select an option: ${NC}"
@@ -184,6 +234,11 @@ while true; do
             ;;
         4)
             disable_ipv6
+            echo -ne "${YELLOW}Press Enter to continue...${NC}"
+            read
+            ;;
+        5)
+            set_mtu
             echo -ne "${YELLOW}Press Enter to continue...${NC}"
             read
             ;;
