@@ -23,7 +23,7 @@
 
 Run the script as root:
 ```
-wget https://raw.githubusercontent.com/monhacer/BB6/refs/heads/main/setup.sh
+wget -4 https://raw.githubusercontent.com/monhacer/BB6/refs/heads/main/setup.sh
 chmod +x setup.sh
 ./setup.sh
 ```
